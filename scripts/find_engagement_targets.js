@@ -66,16 +66,12 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 async function draftReply(candidate) {
   const prompt = `${PERSONA}
 
-以下のツイートに返信するとしたら、どんな一言リプライが自然で好印象でしょうか。
-（ツイート本文は直接引用せず、あなたが投稿への反応として送る返信文だけを考えてください）
+あなたはこれから、あるツイートに返信します。ツイートの投稿者は @${candidate.authorUsername} です。
+家計管理・節約・栄養のいずれかに関心がありそうな相手だと想定し、押し売り感のない自然な一言リプライを考えてください。
+本文は直接見えていないので、一般的な共感コメントや、あなたの専門分野に絡めた軽い一言で構いません。
 
-ツイートURL: ${candidate.url}
-投稿者: @${candidate.authorUsername}
-
-以下のJSON形式のみで出力してください。
-{
-  "draft_reply": "実際の返信文案（100文字以内、押し売り感のない自然な一言）"
-}`;
+出力は必ず次のJSON形式のみとし、前置きやコードブロックは一切つけないでください。
+{"draft_reply": "実際の返信文案（100文字以内）"}`;
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
@@ -83,8 +79,20 @@ async function draftReply(candidate) {
     messages: [{ role: "user", content: prompt }],
   });
   const textBlock = response.content.find((b) => b.type === "text");
-  const match = textBlock.text.match(/\{[\s\S]*\}/);
-  return JSON.parse(match[0]).draft_reply;
+  const rawText = textBlock?.text ?? "";
+  const match = rawText.match(/\{[\s\S]*\}/);
+
+  if (!match) {
+    console.warn(`JSON抽出に失敗しました。生の応答: ${rawText}`);
+    return "（下書き生成に失敗しました。手動で内容を確認してください）";
+  }
+
+  try {
+    return JSON.parse(match[0]).draft_reply;
+  } catch (e) {
+    console.warn(`JSONパースに失敗しました: ${e.message}\n生の応答: ${rawText}`);
+    return "（下書き生成に失敗しました。手動で内容を確認してください）";
+  }
 }
 
 async function createGithubIssue(title, body) {
