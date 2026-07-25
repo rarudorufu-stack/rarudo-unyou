@@ -1,0 +1,42 @@
+name: Weekly Engagement Draft Suggestions
+
+on:
+  schedule:
+    # 毎週月曜 JST 8:00 に実行（UTCでは日曜23:00）
+    - cron: '0 23 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # engagement_log.json をコミットし直すために必要
+  issues: write     # 下書き提案をIssueとして作成するために必要
+
+jobs:
+  suggest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Find engagement targets and suggest replies
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/find_engagement_targets.js
+
+      - name: Commit updated engagement log
+        run: |
+          git config user.name "auto-poster-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add scripts/engagement_log.json
+          git diff --staged --quiet || git commit -m "chore: update engagement log [skip ci]"
+          git push
