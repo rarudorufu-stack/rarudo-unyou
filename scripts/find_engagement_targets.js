@@ -162,4 +162,31 @@ async function main() {
 
   const drafts = [];
   for (const candidate of candidates) {
-    const { gist, draft_reply } = await
+    const { gist, draft_reply } = await draftReply(candidate);
+    drafts.push({ ...candidate, gist, draftReply: draft_reply });
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const body = drafts
+    .map(
+      (d, i) =>
+        `### ${i + 1}. @${d.authorUsername}（フォロワー約${d.followerCount}人）\n` +
+        `- 投稿の要点: ${d.gist}\n` +
+        `- 質問・相談系の投稿: ${d.hasQuestionSignal ? "はい" : "いいえ"}\n` +
+        `- 投稿: ${d.url}\n` +
+        `- 返信下書き案: 「${d.draftReply}」\n`
+    )
+    .join("\n");
+
+  await createGithubIssue(`【返信下書き提案】${today}`, body);
+
+  log.repliedOrSuggestedTweetIds.push(...candidates.map((c) => c.id));
+  await saveEngagementLog(log);
+
+  console.log(`${candidates.length}件の下書きをIssueとして提案しました。`);
+}
+
+main().catch((err) => {
+  console.error("処理中にエラーが発生しました:", err);
+  process.exit(1);
+});
