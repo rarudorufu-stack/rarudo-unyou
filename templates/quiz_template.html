@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 1080px;
+    height: 1080px;
+  }
+
+  .card {
+    width: 1080px;
+    height: 1080px;
+    box-sizing: border-box;
+    padding: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: linear-gradient(135deg, #16543a 0%, #0f3d2a 100%);
+    color: #ffffff;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+
+  .label {
+    font-size: 32px;
+    font-weight: 700;
+    color: #b8f0d4;
+    letter-spacing: 4px;
+    margin-bottom: 24px;
+  }
+
+  .title {
+    font-size: 56px;
+    font-weight: 900;
+    line-height: 1.4;
+    margin-bottom: 32px;
+  }
+
+  .body {
+    font-size: 36px;
+    font-weight: 400;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+
+  .footer {
+    margin-top: auto;
+    font-size: 28px;
+    color: #b8f0d4;
+    opacity: 0.8;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="label">{{LABEL}}</div>
+    <div class="title">{{TITLE}}</div>
+    <div class="body">{{BODY}}</div>
+    <div class="footer">たつや｜管理栄養士×家計再生</div>
+  </div>
+</body>
+</html>

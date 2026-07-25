@@ -1,0 +1,14 @@
+{
+  "name": "x-life-hacks-auto-poster",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "post": "node scripts/generate_and_post.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "twitter-api-v2": "^1.18.2",
+    "puppeteer": "^23.6.0"
+  }
+}
