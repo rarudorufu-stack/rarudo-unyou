@@ -116,7 +116,7 @@ async function main() {
 
   const drafts = [];
   for (const candidate of candidates) {
-    const draftReply = await draftReply(candidate);
+    const replyText = await draftReply(candidate);
     drafts.push({ ...candidate, draftReply: replyText });
   }
 
