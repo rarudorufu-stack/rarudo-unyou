@@ -9,13 +9,28 @@ const ENGAGEMENT_LOG_PATH = path.join(__dirname, "engagement_log.json");
 
 // ---- 検索クエリ（必要に応じて調整してください） ----
 // 「家計・節約・管理栄養士」関連の会話を狙う。「教えて」「悩み」系を混ぜて質問・相談投稿を拾いやすくする
+// -has:links でリンク付き投稿（広告・アフィリエイト系に多い）を除外
 const SEARCH_QUERY =
-  "(家計管理 OR 節約 OR 固定費見直し OR 管理栄養士) (教えて OR 悩んで OR どうしてる OR おすすめ OR コツ) -is:retweet -is:reply lang:ja";
+  "(家計管理 OR 節約 OR 固定費見直し OR 管理栄養士) (教えて OR 悩んで OR どうしてる OR おすすめ OR コツ) -is:retweet -is:reply -has:links lang:ja";
 const MAX_CANDIDATES = 5; // 1回の実行で提案する件数（読み取りコスト抑制のため少なめ）
 
 // エンゲージメントが見込みやすいフォロワー数のレンジ（多すぎ=有名人/メディア、少なすぎ=実在感が薄いを除外）
 const MIN_FOLLOWERS = 30;
 const MAX_FOLLOWERS = 15000;
+
+// 本文が短すぎる投稿（リンクのみ等）は文脈が薄いため除外
+const MIN_TEXT_LENGTH = 20;
+
+// フォロー/フォロワー比率でスパム・botらしさを判定（誰にでもフォローしにいくアカウントを除外）
+// フォロー数がフォロワー数の3倍を超え、かつフォロー数が500以上なら除外
+const MAX_FOLLOWING_TO_FOLLOWER_RATIO = 3;
+const MIN_FOLLOWING_FOR_RATIO_CHECK = 500;
+
+// 広告・スパムによくある文言（含まれていたら除外）
+const SPAM_SIGNALS = [
+  "PR", "広告", "相互フォロー", "フォロバ", "副業", "公式LINE", "LINE@",
+  "詳細はプロフ", "プロフ見て", "DMください", "案件", "アフィリエイト",
+];
 
 // 質問・相談を示唆するキーワード（該当するとスコアが上がる）
 const QUESTION_SIGNALS = ["教えて", "悩んで", "どうしてる", "知りたい", "おすすめ", "？", "?"];
@@ -60,12 +75,29 @@ async function searchCandidates(alreadySeenIds) {
     if (!user) continue;
 
     const followerCount = user.public_metrics?.followers_count ?? 0;
+    const followingCount = user.public_metrics?.following_count ?? 0;
+
     // フォロワー数が極端に多い（有名人/メディア）または少ない（実在感が薄い）アカウントは除外
     if (followerCount < MIN_FOLLOWERS || followerCount > MAX_FOLLOWERS) continue;
 
+    // 誰にでもフォローしにいくタイプのbot/スパムらしいアカウントを除外
+    if (
+      followingCount >= MIN_FOLLOWING_FOR_RATIO_CHECK &&
+      followingCount > followerCount * MAX_FOLLOWING_TO_FOLLOWER_RATIO
+    ) {
+      continue;
+    }
+
+    const text = tweet.text ?? "";
+
+    // 本文が短すぎる（リンクのみ等で文脈が薄い）投稿は除外
+    if (text.length < MIN_TEXT_LENGTH) continue;
+
+    // 広告・スパムによくある文言を含む投稿は除外
+    if (SPAM_SIGNALS.some((kw) => text.includes(kw))) continue;
+
     const replyCount = tweet.public_metrics?.reply_count ?? 0;
     const likeCount = tweet.public_metrics?.like_count ?? 0;
-    const text = tweet.text ?? "";
     const hasQuestionSignal = QUESTION_SIGNALS.some((kw) => text.includes(kw));
 
     // スコアリング：質問・相談系を優先し、返信が少なめ（埋もれていない）投稿を優遇
@@ -81,6 +113,7 @@ async function searchCandidates(alreadySeenIds) {
       likeCount,
       replyCount,
       hasQuestionSignal,
+      text,
       score,
       url: `https://x.com/${user.username}/status/${tweet.id}`,
     });
