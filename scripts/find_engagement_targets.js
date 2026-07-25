@@ -117,7 +117,7 @@ async function main() {
   const drafts = [];
   for (const candidate of candidates) {
     const draftReply = await draftReply(candidate);
-    drafts.push({ ...candidate, draftReply });
+    drafts.push({ ...candidate, draftReply: replyText });
   }
 
   const today = new Date().toISOString().slice(0, 10);
