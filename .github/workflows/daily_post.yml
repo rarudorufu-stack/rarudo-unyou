@@ -2,8 +2,8 @@ name: Daily X Post
 
 on:
   schedule:
-    # 毎日 JST 8:00 に実行（UTCでは前日23:00）
-    - cron: '0 23 * * *'
+    # 毎日 JST 8:17 に実行（UTCでは前日23:17）。毎時00分ちょうどはGitHub側が混雑しやすく遅延の原因になるため、分数をズラしている
+    - cron: '17 23 * * *'
   workflow_dispatch: {}   # 手動実行用（テストに便利）
 
 permissions:
