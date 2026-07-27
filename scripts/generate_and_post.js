@@ -161,9 +161,39 @@ function getTwitterClient() {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// X API Pay-Per-Useの書き込み系エンドポイントで断続的に403が返る既知の不具合への対策。
+// 403の場合は少し待って複数回リトライする（成功するまで、または最大回数に達するまで）。
+async function withRetry(fn, { maxAttempts = 5, delaysMs = [15000, 30000, 60000, 120000] } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const is403 = err?.code === 403;
+      const isLastAttempt = attempt === maxAttempts;
+
+      if (!is403 || isLastAttempt) {
+        throw err;
+      }
+
+      const delay = delaysMs[Math.min(attempt - 1, delaysMs.length - 1)];
+      console.warn(
+        `403エラーを検知（${attempt}/${maxAttempts}回目）。${delay / 1000}秒待って再試行します...`
+      );
+      await sleep(delay);
+    }
+  }
+  throw lastError;
+}
+
 async function postTextOnly(text) {
   const client = getTwitterClient();
-  await client.v2.tweet(text);
+  await withRetry(() => client.v2.tweet(text));
 }
 
 async function postQuizThread(content, imagePaths) {
@@ -171,26 +201,32 @@ async function postQuizThread(content, imagePaths) {
 
   // 1枚目の画像＋キャプションで最初のツイート
   const mediaId1 = await client.v1.uploadMedia(imagePaths[0]);
-  const tweet1 = await client.v2.tweet({
-    text: content.caption,
-    media: { media_ids: [mediaId1] },
-  });
+  const tweet1 = await withRetry(() =>
+    client.v2.tweet({
+      text: content.caption,
+      media: { media_ids: [mediaId1] },
+    })
+  );
 
   // 2枚目：問題スライドをリプライで連結
   const mediaId2 = await client.v1.uploadMedia(imagePaths[1]);
-  const tweet2 = await client.v2.tweet({
-    text: "問題はこちら👇",
-    media: { media_ids: [mediaId2] },
-    reply: { in_reply_to_tweet_id: tweet1.data.id },
-  });
+  const tweet2 = await withRetry(() =>
+    client.v2.tweet({
+      text: "問題はこちら👇",
+      media: { media_ids: [mediaId2] },
+      reply: { in_reply_to_tweet_id: tweet1.data.id },
+    })
+  );
 
   // 3枚目：答えスライドをさらにリプライで連結
   const mediaId3 = await client.v1.uploadMedia(imagePaths[2]);
-  await client.v2.tweet({
-    text: "答え・解説はこちら👇",
-    media: { media_ids: [mediaId3] },
-    reply: { in_reply_to_tweet_id: tweet2.data.id },
-  });
+  await withRetry(() =>
+    client.v2.tweet({
+      text: "答え・解説はこちら👇",
+      media: { media_ids: [mediaId3] },
+      reply: { in_reply_to_tweet_id: tweet2.data.id },
+    })
+  );
 }
 
 // ---- 5. メイン処理 ----
