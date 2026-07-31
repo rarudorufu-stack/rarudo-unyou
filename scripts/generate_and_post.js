@@ -53,26 +53,28 @@ function buildPrompt(postType, usedTopics) {
   if (postType === "knowledge") {
     return `${PERSONA}
 
-今日は「knowledgeポスト」（テキストのみ、280文字以内のX投稿）を1本作成してください。
+今日は「knowledgeポスト」（テキストのみのX投稿）を1本作成してください。
+Xは全角文字を2文字分としてカウントするため、全角130文字以内（英数字なら260文字以内の感覚）を厳守してください。280文字ギリギリを狙うと日本語では文字数超過エラーになるため、少し余裕を持たせて簡潔にまとめてください。
 ${avoidList}
 
 以下のJSON形式のみで出力してください。前置き・説明・コードブロックは一切不要です。
 {
   "topic": "投稿の要点を10文字程度で",
-  "text": "実際の投稿文（280文字以内、絵文字は控えめに1〜2個まで）"
+  "text": "実際の投稿文（全角130文字以内、絵文字は控えめに1〜2個まで）"
 }`;
   }
 
   if (postType === "conversation") {
     return `${PERSONA}
 
-今日は「会話誘発ポスト」（フォロワーがリプライしたくなる質問形式の投稿、140文字以内）を1本作成してください。
+今日は「会話誘発ポスト」（フォロワーがリプライしたくなる質問形式の投稿）を1本作成してください。
+Xは全角文字を2文字分としてカウントするため、全角100文字以内に収めてください。
 ${avoidList}
 
 以下のJSON形式のみで出力してください。
 {
   "topic": "投稿の要点を10文字程度で",
-  "text": "実際の投稿文（質問で終わる、140文字以内）"
+  "text": "実際の投稿文（質問で終わる、全角100文字以内）"
 }`;
   }
 
@@ -80,12 +82,13 @@ ${avoidList}
   return `${PERSONA}
 
 今日は「クイズ投稿」を作成してください。3枚の画像スライド（導入・問題・答え）＋Xのキャプション文で構成します。
+Xは全角文字を2文字分としてカウントするため、キャプションは全角70文字以内に収めてください。
 ${avoidList}
 
 以下のJSON形式のみで出力してください。
 {
   "topic": "投稿の要点を10文字程度で",
-  "caption": "1枚目の画像に添えるXの本文（フックになる一文、100文字以内）",
+  "caption": "1枚目の画像に添えるXの本文（フックになる一文、全角70文字以内）",
   "slide_intro": { "label": "QUIZ", "title": "クイズのタイトル（20文字程度）", "body": "導入文（60文字程度）" },
   "slide_question": { "label": "問題", "title": "問題文（30文字程度）", "body": "選択肢など（80文字程度）" },
   "slide_answer": { "label": "答え", "title": "正解（20文字程度）", "body": "解説（100文字程度）" }
@@ -99,6 +102,33 @@ function extractJson(text) {
   return JSON.parse(match[0]);
 }
 
+// Xの文字数カウントを簡易再現：全角相当の文字（ひらがな・カタカナ・漢字など）は2文字分としてカウント
+function weightedLength(text) {
+  let length = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0);
+    length += code > 0x1000 ? 2 : 1;
+  }
+  return length;
+}
+
+// Xの投稿上限（280）を超えないよう安全に切り詰める。超過していた場合は警告ログを出す
+function enforceXLength(text, label, limit = 280) {
+  if (weightedLength(text) <= limit) return text;
+
+  console.warn(
+    `⚠️ ${label}がX文字数上限を超過（推定${weightedLength(text)}/${limit}）。安全のため切り詰めます。プロンプト側の指示を見直すことを推奨します。`
+  );
+
+  let result = "";
+  for (const ch of text) {
+    const nextLength = weightedLength(result + ch);
+    if (nextLength > limit - 1) break; // 末尾に"…"を1文字分残す余裕を確保
+    result += ch;
+  }
+  return result + "…";
+}
+
 async function generateContent(postType, usedTopics) {
   const prompt = buildPrompt(postType, usedTopics);
   const response = await anthropic.messages.create({
@@ -107,7 +137,17 @@ async function generateContent(postType, usedTopics) {
     messages: [{ role: "user", content: prompt }],
   });
   const textBlock = response.content.find((b) => b.type === "text");
-  return extractJson(textBlock.text);
+  const content = extractJson(textBlock.text);
+
+  // 投稿本文の文字数を安全側でチェック・補正
+  if (content.text) {
+    content.text = enforceXLength(content.text, "投稿本文");
+  }
+  if (content.caption) {
+    content.caption = enforceXLength(content.caption, "キャプション");
+  }
+
+  return content;
 }
 
 // ---- 3. クイズ画像の生成（HTML→スクリーンショット） ----
